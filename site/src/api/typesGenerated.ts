@@ -35,6 +35,7 @@ export type AuditDiff = Record<string, any>
 // From codersdk/audit.go
 export interface AuditLog {
   readonly id: string
+  readonly request_id: string
   readonly time: string
   readonly organization_id: string
   // Named type "net/netip.Addr" unknown, using "any"

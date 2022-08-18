@@ -339,6 +339,7 @@ type AuditLog struct {
 	Diff             json.RawMessage `db:"diff" json:"diff"`
 	StatusCode       int32           `db:"status_code" json:"status_code"`
 	AdditionalFields json.RawMessage `db:"additional_fields" json:"additional_fields"`
+	RequestID        uuid.UUID       `db:"request_id" json:"request_id"`
 }
 
 type File struct {

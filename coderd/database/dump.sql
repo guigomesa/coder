@@ -113,7 +113,8 @@ CREATE TABLE audit_logs (
     action audit_action NOT NULL,
     diff jsonb NOT NULL,
     status_code integer NOT NULL,
-    additional_fields jsonb NOT NULL
+    additional_fields jsonb NOT NULL,
+    request_id uuid NOT NULL
 );
 
 CREATE TABLE files (

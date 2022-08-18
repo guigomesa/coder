@@ -33,6 +33,7 @@ type AuditDiff map[string]struct {
 
 type AuditLog struct {
 	ID               uuid.UUID       `json:"id"`
+	RequestID        uuid.UUID       `json:"request_id"`
 	Time             time.Time       `json:"time"`
 	OrganizationID   uuid.UUID       `json:"organization_id"`
 	IP               netip.Addr      `json:"ip"`
