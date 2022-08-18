@@ -491,6 +491,7 @@ func TestAuthorizeDomain(t *testing.T) {
 }
 
 // TestAuthorizeLevels ensures level overrides are acting appropriately
+//
 //nolint:paralleltest
 func TestAuthorizeLevels(t *testing.T) {
 	defOrg := uuid.New()

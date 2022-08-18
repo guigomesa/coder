@@ -13,6 +13,7 @@ import (
 )
 
 // BenchmarkRBACFilter benchmarks the rbac.Filter method.
+//
 //	go test -bench BenchmarkRBACFilter -benchmem -memprofile memprofile.out -cpuprofile profile.out
 func BenchmarkRBACFilter(b *testing.B) {
 	orgs := []uuid.UUID{
