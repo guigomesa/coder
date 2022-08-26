@@ -24,6 +24,7 @@ type Workspace struct {
 	OwnerName         string         `json:"owner_name"`
 	TemplateID        uuid.UUID      `json:"template_id"`
 	TemplateName      string         `json:"template_name"`
+	TemplateIcon      string         `json:"template_icon"`
 	LatestBuild       WorkspaceBuild `json:"latest_build"`
 	Outdated          bool           `json:"outdated"`
 	Name              string         `json:"name"`
@@ -161,6 +162,23 @@ func (c *Client) WatchWorkspace(ctx context.Context, id uuid.UUID) (<-chan Works
 	return wc, nil
 }
 
+type UpdateWorkspaceRequest struct {
+	Name string `json:"name,omitempty" validate:"username"`
+}
+
+func (c *Client) UpdateWorkspace(ctx context.Context, id uuid.UUID, req UpdateWorkspaceRequest) error {
+	path := fmt.Sprintf("/api/v2/workspaces/%s", id.String())
+	res, err := c.Request(ctx, http.MethodPatch, path, req)
+	if err != nil {
+		return xerrors.Errorf("update workspace: %w", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		return readBodyAsError(res)
+	}
+	return nil
+}
+
 // UpdateWorkspaceAutostartRequest is a request to update a workspace's autostart schedule.
 type UpdateWorkspaceAutostartRequest struct {
 	Schedule *string `json:"schedule"`
@@ -262,7 +280,6 @@ func (f WorkspaceFilter) asRequestOption() requestOption {
 // Workspaces returns all workspaces the authenticated user has access to.
 func (c *Client) Workspaces(ctx context.Context, filter WorkspaceFilter) ([]Workspace, error) {
 	res, err := c.Request(ctx, http.MethodGet, "/api/v2/workspaces", nil, filter.asRequestOption())
-
 	if err != nil {
 		return nil, err
 	}

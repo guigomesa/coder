@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"golang.org/x/exp/slices"
 
 	"github.com/coder/coder/coderd/database"
@@ -42,6 +43,7 @@ func New() database.Store {
 			workspaceBuilds:                make([]database.WorkspaceBuild, 0),
 			workspaceApps:                  make([]database.WorkspaceApp, 0),
 			workspaces:                     make([]database.Workspace, 0),
+			licenses:                       make([]database.License, 0),
 		},
 	}
 }
@@ -92,8 +94,10 @@ type data struct {
 	workspaceBuilds                []database.WorkspaceBuild
 	workspaceApps                  []database.WorkspaceApp
 	workspaces                     []database.Workspace
+	licenses                       []database.License
 
-	deploymentID string
+	deploymentID  string
+	lastLicenseID int32
 }
 
 // InTx doesn't rollback data properly for in-memory yet.
@@ -883,6 +887,7 @@ func (q *fakeQuerier) UpdateTemplateMetaByID(_ context.Context, arg database.Upd
 		tpl.UpdatedAt = database.Now()
 		tpl.Name = arg.Name
 		tpl.Description = arg.Description
+		tpl.Icon = arg.Icon
 		tpl.MaxTtl = arg.MaxTtl
 		tpl.MinAutostartInterval = arg.MinAutostartInterval
 		q.templates[idx] = tpl
@@ -1560,10 +1565,6 @@ func (q *fakeQuerier) InsertTemplate(_ context.Context, arg database.InsertTempl
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
-	// default values
-	if arg.MaxTtl == 0 {
-		arg.MaxTtl = int64(168 * time.Hour)
-	}
 	if arg.MinAutostartInterval == 0 {
 		arg.MinAutostartInterval = int64(time.Hour)
 	}
@@ -2086,6 +2087,32 @@ func (q *fakeQuerier) UpdateProvisionerJobWithCompleteByID(_ context.Context, ar
 	return sql.ErrNoRows
 }
 
+func (q *fakeQuerier) UpdateWorkspace(_ context.Context, arg database.UpdateWorkspaceParams) (database.Workspace, error) {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
+	for i, workspace := range q.workspaces {
+		if workspace.Deleted || workspace.ID != arg.ID {
+			continue
+		}
+		for _, other := range q.workspaces {
+			if other.Deleted || other.ID == workspace.ID || workspace.OwnerID != other.OwnerID {
+				continue
+			}
+			if other.Name == arg.Name {
+				return database.Workspace{}, &pq.Error{Code: "23505", Message: "duplicate key value violates unique constraint"}
+			}
+		}
+
+		workspace.Name = arg.Name
+		q.workspaces[i] = workspace
+
+		return workspace, nil
+	}
+
+	return database.Workspace{}, sql.ErrNoRows
+}
+
 func (q *fakeQuerier) UpdateWorkspaceAutostart(_ context.Context, arg database.UpdateWorkspaceAutostartParams) error {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
@@ -2274,6 +2301,45 @@ func (q *fakeQuerier) GetDeploymentID(_ context.Context) (string, error) {
 	defer q.mutex.RUnlock()
 
 	return q.deploymentID, nil
+}
+
+func (q *fakeQuerier) InsertLicense(
+	_ context.Context, arg database.InsertLicenseParams) (database.License, error) {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
+	l := database.License{
+		ID:         q.lastLicenseID + 1,
+		UploadedAt: arg.UploadedAt,
+		JWT:        arg.JWT,
+		Exp:        arg.Exp,
+	}
+	q.lastLicenseID = l.ID
+	q.licenses = append(q.licenses, l)
+	return l, nil
+}
+
+func (q *fakeQuerier) GetLicenses(_ context.Context) ([]database.License, error) {
+	q.mutex.RLock()
+	defer q.mutex.RUnlock()
+
+	results := append([]database.License{}, q.licenses...)
+	sort.Slice(results, func(i, j int) bool { return results[i].ID < results[j].ID })
+	return results, nil
+}
+
+func (q *fakeQuerier) DeleteLicense(_ context.Context, id int32) (int32, error) {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
+	for index, l := range q.licenses {
+		if l.ID == id {
+			q.licenses[index] = q.licenses[len(q.licenses)-1]
+			q.licenses = q.licenses[:len(q.licenses)-1]
+			return id, nil
+		}
+	}
+	return 0, sql.ErrNoRows
 }
 
 func (q *fakeQuerier) GetUserLinkByLinkedID(_ context.Context, id string) (database.UserLink, error) {

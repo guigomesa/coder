@@ -1,8 +1,9 @@
 import { makeStyles } from "@material-ui/core/styles"
 import { useMachine } from "@xstate/react"
 import { FC, useEffect, useRef, useState } from "react"
-import { Helmet } from "react-helmet"
+import { Helmet } from "react-helmet-async"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
+import { colors } from "theme/colors"
 import { v4 as uuidv4 } from "uuid"
 import * as XTerm from "xterm"
 import { FitAddon } from "xterm-addon-fit"
@@ -18,9 +19,11 @@ export const Language = {
   websocketErrorMessagePrefix: "WebSocket failed: ",
 }
 
-const TerminalPage: FC<{
-  readonly renderer?: XTerm.RendererType
-}> = ({ renderer }) => {
+const TerminalPage: FC<
+  React.PropsWithChildren<{
+    readonly renderer?: XTerm.RendererType
+  }>
+> = ({ renderer }) => {
   const location = useLocation()
   const navigate = useNavigate()
   const styles = useStyles()
@@ -73,9 +76,7 @@ const TerminalPage: FC<{
       fontFamily: MONOSPACE_FONT_FAMILY,
       fontSize: 16,
       theme: {
-        // This is a slight off-black.
-        // It's really easy on the eyes!
-        background: "#1F1F1F",
+        background: colors.gray[16],
       },
       rendererType: renderer,
     })

@@ -485,6 +485,82 @@ func (q *sqlQuerier) UpdateGitSSHKey(ctx context.Context, arg UpdateGitSSHKeyPar
 	return err
 }
 
+const deleteLicense = `-- name: DeleteLicense :one
+DELETE
+FROM licenses
+WHERE id = $1
+RETURNING id
+`
+
+func (q *sqlQuerier) DeleteLicense(ctx context.Context, id int32) (int32, error) {
+	row := q.db.QueryRowContext(ctx, deleteLicense, id)
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getLicenses = `-- name: GetLicenses :many
+SELECT id, uploaded_at, jwt, exp
+FROM licenses
+ORDER BY (id)
+`
+
+func (q *sqlQuerier) GetLicenses(ctx context.Context) ([]License, error) {
+	rows, err := q.db.QueryContext(ctx, getLicenses)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []License
+	for rows.Next() {
+		var i License
+		if err := rows.Scan(
+			&i.ID,
+			&i.UploadedAt,
+			&i.JWT,
+			&i.Exp,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const insertLicense = `-- name: InsertLicense :one
+INSERT INTO
+	licenses (
+	uploaded_at,
+	jwt,
+	exp
+)
+VALUES
+	($1, $2, $3) RETURNING id, uploaded_at, jwt, exp
+`
+
+type InsertLicenseParams struct {
+	UploadedAt time.Time `db:"uploaded_at" json:"uploaded_at"`
+	JWT        string    `db:"jwt" json:"jwt"`
+	Exp        time.Time `db:"exp" json:"exp"`
+}
+
+func (q *sqlQuerier) InsertLicense(ctx context.Context, arg InsertLicenseParams) (License, error) {
+	row := q.db.QueryRowContext(ctx, insertLicense, arg.UploadedAt, arg.JWT, arg.Exp)
+	var i License
+	err := row.Scan(
+		&i.ID,
+		&i.UploadedAt,
+		&i.JWT,
+		&i.Exp,
+	)
+	return i, err
+}
+
 const getOrganizationIDsByMemberIDs = `-- name: GetOrganizationIDsByMemberIDs :many
 SELECT
     user_id, array_agg(organization_id) :: uuid [ ] AS "organization_IDs"
@@ -1796,7 +1872,7 @@ func (q *sqlQuerier) InsertDeploymentID(ctx context.Context, value string) error
 
 const getTemplateByID = `-- name: GetTemplateByID :one
 SELECT
-	id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, max_ttl, min_autostart_interval, created_by
+	id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, max_ttl, min_autostart_interval, created_by, icon
 FROM
 	templates
 WHERE
@@ -1821,13 +1897,14 @@ func (q *sqlQuerier) GetTemplateByID(ctx context.Context, id uuid.UUID) (Templat
 		&i.MaxTtl,
 		&i.MinAutostartInterval,
 		&i.CreatedBy,
+		&i.Icon,
 	)
 	return i, err
 }
 
 const getTemplateByOrganizationAndName = `-- name: GetTemplateByOrganizationAndName :one
 SELECT
-	id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, max_ttl, min_autostart_interval, created_by
+	id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, max_ttl, min_autostart_interval, created_by, icon
 FROM
 	templates
 WHERE
@@ -1860,12 +1937,13 @@ func (q *sqlQuerier) GetTemplateByOrganizationAndName(ctx context.Context, arg G
 		&i.MaxTtl,
 		&i.MinAutostartInterval,
 		&i.CreatedBy,
+		&i.Icon,
 	)
 	return i, err
 }
 
 const getTemplates = `-- name: GetTemplates :many
-SELECT id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, max_ttl, min_autostart_interval, created_by FROM templates
+SELECT id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, max_ttl, min_autostart_interval, created_by, icon FROM templates
 ORDER BY (name, id) ASC
 `
 
@@ -1891,6 +1969,7 @@ func (q *sqlQuerier) GetTemplates(ctx context.Context) ([]Template, error) {
 			&i.MaxTtl,
 			&i.MinAutostartInterval,
 			&i.CreatedBy,
+			&i.Icon,
 		); err != nil {
 			return nil, err
 		}
@@ -1907,7 +1986,7 @@ func (q *sqlQuerier) GetTemplates(ctx context.Context) ([]Template, error) {
 
 const getTemplatesWithFilter = `-- name: GetTemplatesWithFilter :many
 SELECT
-	id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, max_ttl, min_autostart_interval, created_by
+	id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, max_ttl, min_autostart_interval, created_by, icon
 FROM
 	templates
 WHERE
@@ -1968,6 +2047,7 @@ func (q *sqlQuerier) GetTemplatesWithFilter(ctx context.Context, arg GetTemplate
 			&i.MaxTtl,
 			&i.MinAutostartInterval,
 			&i.CreatedBy,
+			&i.Icon,
 		); err != nil {
 			return nil, err
 		}
@@ -1995,10 +2075,11 @@ INSERT INTO
 		description,
 		max_ttl,
 		min_autostart_interval,
-		created_by
+		created_by,
+		icon
 	)
 VALUES
-	($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, max_ttl, min_autostart_interval, created_by
+	($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, max_ttl, min_autostart_interval, created_by, icon
 `
 
 type InsertTemplateParams struct {
@@ -2013,6 +2094,7 @@ type InsertTemplateParams struct {
 	MaxTtl               int64           `db:"max_ttl" json:"max_ttl"`
 	MinAutostartInterval int64           `db:"min_autostart_interval" json:"min_autostart_interval"`
 	CreatedBy            uuid.UUID       `db:"created_by" json:"created_by"`
+	Icon                 string          `db:"icon" json:"icon"`
 }
 
 func (q *sqlQuerier) InsertTemplate(ctx context.Context, arg InsertTemplateParams) (Template, error) {
@@ -2028,6 +2110,7 @@ func (q *sqlQuerier) InsertTemplate(ctx context.Context, arg InsertTemplateParam
 		arg.MaxTtl,
 		arg.MinAutostartInterval,
 		arg.CreatedBy,
+		arg.Icon,
 	)
 	var i Template
 	err := row.Scan(
@@ -2043,6 +2126,7 @@ func (q *sqlQuerier) InsertTemplate(ctx context.Context, arg InsertTemplateParam
 		&i.MaxTtl,
 		&i.MinAutostartInterval,
 		&i.CreatedBy,
+		&i.Icon,
 	)
 	return i, err
 }
@@ -2097,11 +2181,12 @@ SET
 	description = $3,
 	max_ttl = $4,
 	min_autostart_interval = $5,
-	name = $6
+	name = $6,
+	icon = $7
 WHERE
 	id = $1
 RETURNING
-	id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, max_ttl, min_autostart_interval, created_by
+	id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, max_ttl, min_autostart_interval, created_by, icon
 `
 
 type UpdateTemplateMetaByIDParams struct {
@@ -2111,6 +2196,7 @@ type UpdateTemplateMetaByIDParams struct {
 	MaxTtl               int64     `db:"max_ttl" json:"max_ttl"`
 	MinAutostartInterval int64     `db:"min_autostart_interval" json:"min_autostart_interval"`
 	Name                 string    `db:"name" json:"name"`
+	Icon                 string    `db:"icon" json:"icon"`
 }
 
 func (q *sqlQuerier) UpdateTemplateMetaByID(ctx context.Context, arg UpdateTemplateMetaByIDParams) error {
@@ -2121,6 +2207,7 @@ func (q *sqlQuerier) UpdateTemplateMetaByID(ctx context.Context, arg UpdateTempl
 		arg.MaxTtl,
 		arg.MinAutostartInterval,
 		arg.Name,
+		arg.Icon,
 	)
 	return err
 }
@@ -4639,6 +4726,40 @@ func (q *sqlQuerier) InsertWorkspace(ctx context.Context, arg InsertWorkspacePar
 		arg.AutostartSchedule,
 		arg.Ttl,
 	)
+	var i Workspace
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.OwnerID,
+		&i.OrganizationID,
+		&i.TemplateID,
+		&i.Deleted,
+		&i.Name,
+		&i.AutostartSchedule,
+		&i.Ttl,
+	)
+	return i, err
+}
+
+const updateWorkspace = `-- name: UpdateWorkspace :one
+UPDATE
+	workspaces
+SET
+	name = $2
+WHERE
+	id = $1
+	AND deleted = false
+RETURNING id, created_at, updated_at, owner_id, organization_id, template_id, deleted, name, autostart_schedule, ttl
+`
+
+type UpdateWorkspaceParams struct {
+	ID   uuid.UUID `db:"id" json:"id"`
+	Name string    `db:"name" json:"name"`
+}
+
+func (q *sqlQuerier) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error) {
+	row := q.db.QueryRowContext(ctx, updateWorkspace, arg.ID, arg.Name)
 	var i Workspace
 	err := row.Scan(
 		&i.ID,
