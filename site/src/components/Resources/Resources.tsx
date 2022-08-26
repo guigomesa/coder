@@ -105,6 +105,7 @@ export const Resources: FC<React.PropsWithChildren<ResourcesProps>> = ({
                       <TableCell className={styles.agentColumn}>
                         {agent.name}
                         <div className={styles.agentInfo}>
+                          <span className={styles.agentVersion}>{agent.version}</span>
                           <span className={styles.operatingSystem}>{agent.operating_system}</span>
                           {WorkspaceStateEnum[workspaceStatus] !==
                             WorkspaceStateEnum["stopped"] && (
@@ -192,6 +193,10 @@ const useStyles = makeStyles((theme) => ({
   operatingSystem: {
     display: "block",
     textTransform: "capitalize",
+  },
+
+  agentVersion: {
+    display: "block",
   },
 
   accessLinks: {

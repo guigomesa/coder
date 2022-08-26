@@ -1,6 +1,7 @@
 package codersdk
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"cdr.dev/slog"
 
 	"github.com/coder/coder/agent"
+	"github.com/coder/coder/buildinfo"
 	"github.com/coder/coder/coderd/turnconn"
 	"github.com/coder/coder/peer"
 	"github.com/coder/coder/peer/peerwg"
@@ -46,6 +48,10 @@ type AzureInstanceIdentityToken struct {
 // has been exchanged for a session token.
 type WorkspaceAgentAuthenticateResponse struct {
 	SessionToken string `json:"session_token"`
+}
+
+type PostWorkspaceAgentVersionRequest struct {
+	Version string `json:"version"`
 }
 
 // AuthWorkspaceGoogleInstanceIdentity uses the Google Compute Engine Metadata API to
@@ -240,6 +246,23 @@ func (c *Client) ListenWorkspaceAgent(ctx context.Context, logger slog.Logger) (
 	if err != nil {
 		return agent.Metadata{}, nil, xerrors.Errorf("listen peerbroker: %w", err)
 	}
+
+	// Phone home and tell the mothership what version we're on.
+	var agentVersionPayload bytes.Buffer
+	if err := json.NewEncoder(&agentVersionPayload).Encode(&PostWorkspaceAgentVersionRequest{Version: buildinfo.Version()}); err != nil {
+		// This should not be a fatal error, but also should not pass unnoticed.
+		logger.Error(ctx, "unable to encode agent version", slog.Error(err))
+	} else {
+		res, err = c.Request(ctx, http.MethodPost, "/api/v2/workspaceagents/me/metadata", agentVersionPayload)
+		if err != nil {
+			// Again, don't crash and burn if we can't phone home, but don't keep stumm either.
+			logger.Error(ctx, "unable to inform coderd of agent version", slog.Error(err))
+		}
+		// Discord the response
+		_, _ = io.Copy(io.Discard, res.Body)
+		_ = res.Body.Close()
+	}
+	// Fetch updated agent metadata
 	res, err = c.Request(ctx, http.MethodGet, "/api/v2/workspaceagents/me/metadata", nil)
 	if err != nil {
 		return agent.Metadata{}, nil, err

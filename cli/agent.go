@@ -20,6 +20,7 @@ import (
 	"cdr.dev/slog/sloggers/sloghuman"
 	"github.com/coder/coder/agent"
 	"github.com/coder/coder/agent/reaper"
+	"github.com/coder/coder/buildinfo"
 	"github.com/coder/coder/cli/cliflag"
 	"github.com/coder/coder/codersdk"
 	"github.com/coder/retry"
@@ -53,6 +54,7 @@ func workspaceAgent() *cobra.Command {
 			}
 			defer logWriter.Close()
 			logger := slog.Make(sloghuman.Sink(cmd.ErrOrStderr()), sloghuman.Sink(logWriter)).Leveled(slog.LevelDebug)
+			logger.Info(cmd.Context(), "coder agent version: "+buildinfo.Version())
 
 			isLinux := runtime.GOOS == "linux"
 
